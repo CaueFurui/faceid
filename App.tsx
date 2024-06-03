@@ -1,118 +1,331 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, {useState} from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
   StyleSheet,
-  Text,
-  useColorScheme,
+  SafeAreaView,
   View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
+import FeatherIcon from 'react-native-vector-icons/Feather';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import ReactNativeBiometrics, {BiometryTypes} from 'react-native-biometrics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const INPUT_OFFSET = 110;
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+export default function Example() {
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+  });
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+  // mock server functions
+  const verifyUserCredentials = (payload: any) => {
+    // make an HTTP request to the server and verify user credentials
+    console.log('payload', payload);
+    return {userId: '123456'};
+  };
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const sendPublicKeyToServer = (publicKey: any) => {
+    // make an HTTP request to the server and save the `publicKey` on the user's entity
+    console.log({publicKey});
+  };
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const verifySignatureWithServer = async ({signature, payload}: any) => {
+    // make an HTTP request to the server and verify the signature with the public key.
+    console.log('signature', signature);
+    console.log('payloadVerify', payload);
+    return {status: 'success'};
   };
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+    <SafeAreaView style={{flex: 1, backgroundColor: '#e8ecf4'}}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <FeatherIcon color="#075eec" name="lock" size={44} />
+          </View>
+
+          <Text style={styles.title}>
+            Welcome to <Text style={{color: '#0742fc'}}>RealApps</Text>
+          </Text>
+
+          <Text style={styles.subtitle}>Collaborate with your friends</Text>
         </View>
-      </ScrollView>
+
+        <View style={styles.form}>
+          <View style={styles.input}>
+            <Text style={styles.inputLabel}>Email address</Text>
+
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              onChangeText={email => setForm({...form, email})}
+              placeholder=""
+              placeholderTextColor="#6b7280"
+              style={styles.inputControl}
+              value={form.email}
+            />
+          </View>
+
+          <View style={styles.input}>
+            <Text style={styles.inputLabel}>Password</Text>
+
+            <TextInput
+              autoCorrect={false}
+              onChangeText={password => setForm({...form, password})}
+              placeholder=""
+              placeholderTextColor="#6b7280"
+              style={styles.inputControl}
+              secureTextEntry={true}
+              value={form.password}
+            />
+          </View>
+
+          <View style={styles.formAction}>
+            <TouchableOpacity
+              onPress={async () => {
+                // Verify user credentials before asking them to enable Face ID
+                const {userId} = verifyUserCredentials(form);
+
+                const rnBiometrics = new ReactNativeBiometrics();
+
+                const {available, biometryType} =
+                  await rnBiometrics.isSensorAvailable();
+
+                if (available && biometryType === BiometryTypes.FaceID) {
+                  Alert.alert(
+                    'Face ID',
+                    'Would you like to enable Face ID authentication for the next time?',
+                    [
+                      {
+                        text: 'Yes please',
+                        onPress: async () => {
+                          const {publicKey} = await rnBiometrics.createKeys();
+
+                          // `publicKey` has to be saved on the user's entity in the database
+                          sendPublicKeyToServer({userId, publicKey});
+
+                          // save `userId` in the local storage to use it during Face ID authentication
+                          await AsyncStorage.setItem('userId', userId);
+                        },
+                      },
+                      {text: 'Cancel', style: 'cancel'},
+                    ],
+                  );
+                }
+              }}>
+              <View style={styles.btn}>
+                <Text style={styles.btnText}>Sign in</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.formActionSpacer} />
+
+            <TouchableOpacity
+              onPress={async () => {
+                const rnBiometrics = new ReactNativeBiometrics();
+
+                const {available, biometryType} =
+                  await rnBiometrics.isSensorAvailable();
+
+                if (!available || biometryType !== BiometryTypes.FaceID) {
+                  Alert.alert(
+                    'Oops!',
+                    'Face ID is not available on this device.',
+                  );
+                  return;
+                }
+
+                const userId = await AsyncStorage.getItem('userId');
+
+                if (!userId) {
+                  Alert.alert(
+                    'Oops!',
+                    'You have to sign in using your credentials first to enable Face ID.',
+                  );
+                  return;
+                }
+
+                const timestamp = Math.round(
+                  new Date().getTime() / 1000,
+                ).toString();
+                const payload = `${userId}__${timestamp}`;
+
+                const {success, signature} = await rnBiometrics.createSignature(
+                  {
+                    promptMessage: 'Sign in',
+                    payload,
+                  },
+                );
+
+                if (!success) {
+                  Alert.alert(
+                    'Oops!',
+                    'Something went wrong during authentication with Face ID. Please try again.',
+                  );
+                  return;
+                }
+
+                const {status, message} = await verifySignatureWithServer({
+                  signature,
+                  payload,
+                });
+
+                if (status !== 'success') {
+                  Alert.alert('Oops!', message);
+                  return;
+                }
+
+                Alert.alert('Success!', 'You are successfully authenticated!');
+              }}>
+              <View style={styles.btnSecondary}>
+                <MaterialCommunityIcons
+                  color="#000"
+                  name="face-recognition"
+                  size={22}
+                  style={{marginRight: 12}}
+                />
+
+                <Text style={styles.btnSecondaryText}>Face ID</Text>
+
+                <View style={{width: 34}} />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.formFooter}>
+            By clicking "Sign in" above, you agree to RealApps's
+            <Text style={{fontWeight: '600'}}> Terms & Conditions </Text>
+            and
+            <Text style={{fontWeight: '600'}}> Privacy Policy</Text>.
+          </Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    padding: 24,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
+  title: {
+    fontSize: 27,
     fontWeight: '700',
+    color: '#1d1d1d',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#929292',
+    textAlign: 'center',
+  },
+  /** Header */
+  header: {
+    marginVertical: 36,
+  },
+  headerIcon: {
+    alignSelf: 'center',
+    width: 80,
+    height: 80,
+    marginBottom: 36,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /** Form */
+  form: {
+    marginBottom: 24,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  formAction: {
+    marginVertical: 24,
+  },
+  formActionSpacer: {
+    marginVertical: 8,
+  },
+  formFooter: {
+    marginTop: 'auto',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
+    color: '#929292',
+    textAlign: 'center',
+  },
+  /** Input */
+  input: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    position: 'absolute',
+    width: INPUT_OFFSET,
+    lineHeight: 44,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    marginHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#c0c0c0',
+    zIndex: 9,
+  },
+  inputControl: {
+    height: 44,
+    backgroundColor: '#fff',
+    paddingLeft: INPUT_OFFSET,
+    paddingRight: 24,
+    borderRadius: 12,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#222',
+  },
+  /** Button */
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  btnText: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  btnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderColor: '#000',
+  },
+  btnSecondaryText: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: '600',
+    color: '#000',
   },
 });
-
-export default App;
